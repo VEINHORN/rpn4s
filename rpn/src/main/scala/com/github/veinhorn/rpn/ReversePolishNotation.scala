@@ -45,7 +45,9 @@ object ReversePolishNotation {
   case class Comma(value: String) extends Token
 
   // функции
-  trait Func extends Token
+  trait Func extends Token {
+    override def priority: Int = 4
+  }
   case class Sin(value: String) extends Func
   case class Min(value: String) extends Func
   case class Max(value: String) extends Func
@@ -125,7 +127,7 @@ object ReversePolishNotation {
   def rpn(tokens: List[Token]): List[Token] = {
     /**  Пока на вершине стека присутствует оператор - сравниваем приоритеты и перекладываем в список */
     def whileOperator(op: Operator)(tokens: List[Token], stack: Stack[Token]): (List[Token], Stack[Token]) =
-      if (stack.nonEmpty && stack.top.isInstanceOf[Operator] && op <= stack.top) {
+      if (stack.nonEmpty && (stack.top.isInstanceOf[Operator] || stack.top.isInstanceOf[Func]) && op <= stack.top) {
         stack.pop2 match { case (top, s) => whileOperator(op)(tokens :+ top, s) }
       } else {
         tokens -> (stack push op)
