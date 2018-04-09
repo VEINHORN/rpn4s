@@ -17,9 +17,7 @@ object ReversePolishNotation {
     override def toString: String = value
   }
 
-  /**
-    * Supported operators with specified priority
-    */
+  // operators and there priorities
   trait Operator extends Token
   class Plus extends Operator {
     override def priority: Int = 1
@@ -39,7 +37,7 @@ object ReversePolishNotation {
     override def priority: Int = 3
   }
 
-  // другие управляющие символы
+  // some other symbols
   class OpenBracket extends Token
   class CloseBracket extends Token
   class Comma extends Token
@@ -55,15 +53,14 @@ object ReversePolishNotation {
   class Max extends Func
 
   /**
-    * Преобразование строки в список токенов, передаваемая пустая строка используется для накопления цифр в числах,
-    * выступая по сути в виде стека (на базе строки) для символов а также для имен функций вроде cos(1), max(1, 2)
-    * @param expression исходное выражение в виде строки
-    * @return список с токенами
+    * Transforms string arithmetic expression to list of tokens
+    * @param expression is a string arithmetic expression
+    * @return a list of tokens
     */
   def tokenize(expression: String): List[Token] = {
-    /** Определяем является строка обычным числом или названием функции */
+    /** Determines is it number or function name */
     def numberOrFunction(s: String): Token = {
-      /** Пытаемся найти поддерживаемые функции */
+      /** Tries to find supported functions */
       def getFunction(funcName: String) = funcName match {
         case "sin" => new Sin
         case "cos" => new Cos
@@ -78,7 +75,7 @@ object ReversePolishNotation {
       }
     }
 
-    /** Получаем оператор на основании символа */
+    /** Get operator based on symbol */
     def operator(symbol: Char): Token = symbol match {
       case '+' => new Plus
       case '-' => new Minus
@@ -92,33 +89,33 @@ object ReversePolishNotation {
       case _   => throw new Exception(s"Unsupported operator $symbol")
     }
 
-    /** Парсер для чисел, имен функций и операторов */
     val parser: ((List[Token], String), Char) => (List[Token], String) = {
-      case (meta, ' ') => meta // обработка пробелов
-      // парсинг цифр
+      // handle spaces
+      case (meta, ' ') => meta
+      // parse numbers
       case ((tokens, stack), symbol) if symbol.isDigit && stack.nonEmpty => tokens -> (stack + symbol.toString) // накапливаем цифры
       case ((tokens, stack), symbol) if symbol.isDigit && stack.isEmpty => tokens -> ("" + symbol.toString)
 
-      // парсинг имен функций
+      // parse function names
       case ((tokens, stack), symbol) if symbol.isLetter && stack.nonEmpty => tokens -> (stack + symbol.toString)
       case ((tokens, stack), symbol) if symbol.isLetter && stack.isEmpty => tokens -> ("" + symbol.toString)
 
-      // парсинг запятой в аргументах функции
+      // parse commas which is a function arguments separator
       case ((tokens, stack), ',') if stack.nonEmpty => ((tokens :+ numberOrFunction(stack)) :+ new Comma) -> ""
       case ((tokens, stack), ',') if stack.isEmpty => (tokens :+ new Comma) -> stack
 
-      // парсинг точки (experimental)
+      // parse comma which is used in floating numbers
       case ((tokens, stack), symbol@'.') => tokens -> (stack + symbol.toString)
 
-      // парсинг операторов
+      // parse operators
       case ((tokens, stack), symbol) if !symbol.isLetterOrDigit && stack.nonEmpty => ((tokens :+ numberOrFunction(stack)) :+ operator(symbol)) -> ""
       case ((tokens, stack), symbol) if !symbol.isLetterOrDigit && stack.isEmpty  => (tokens :+ operator(symbol)) -> ""
 
-      // когда условие не попало ни под одно условие
-      case (_, symbol)                                                            => throw new Exception(s"Unknown error on $symbol")
+      // when we cannot determine what it is
+      case (_, symbol) => throw new Exception(s"Unknown error on \"$symbol\" symbol")
     }
 
-    // в конце процесса парсинга выкидываем число из стека если оно там осталось
+    /** At the end of tokenization pop number from stack if it's exist in the stack */
     expression.foldLeft(List.empty[Token] -> "")(parser) match {
       case (tokens, "")    => tokens
       case (tokens, stack) => tokens :+ Number(stack)
@@ -126,12 +123,12 @@ object ReversePolishNotation {
   }
 
   /**
-    * Преобразование списка токенов в ОПН (постфиксная форма) используя "Shunting-yard algorithm"
-    * @param tokens входящий список токенов
-    * @return список токенов в ОПН
+    * Transform infix notation to the RPN postfix notation using "Shunting-yard algorithm"
+    * @param tokens is an input list of tokens in infix notation
+    * @return a list of tokens in infix RPN notation
     */
   def rpn(tokens: List[Token]): List[Token] = {
-    /**  Пока на вершине стека присутствует оператор - сравниваем приоритеты и перекладываем в список */
+    /** While we have an operator on the top of stack - compare priorities and move operator from stack to list */
     def whileOperator(op: Operator)(tokens: List[Token], stack: Stack[Token]): (List[Token], Stack[Token]) =
       if (stack.nonEmpty && (stack.top.isInstanceOf[Operator] || stack.top.isInstanceOf[Func]) && op <= stack.top) {
         stack.pop2 match { case (top, s) => whileOperator(op)(tokens :+ top, s) }
@@ -151,24 +148,24 @@ object ReversePolishNotation {
       }
 
     tokens.foldLeft(List.empty[Token] -> Stack.empty[Token]) {
-      /** Если токен - число */
+      /** when token is a number */
       case ((output, stack), number@Number(_)) => (output :+ number) -> stack
-      /** Если токен - название функции */
+      /** when token is a function name */
       case ((output, stack), func: Func) => output -> (stack push func)
-      /** Если токен - запятая */
+      /** when token is a comma */
       case ((output, stack), _: Comma) =>
-        val popped = stack.takeWhile { // можно еще как-то проверить что не было открывающей скобки
+        val popped = stack.takeWhile { // here we can check missing open bracket
           case _: OpenBracket => false
           case _              => true
         }
         output ++ popped -> stack.takeRight(stack.length - popped.length)
-      /** если токен - оператор */
+      /** when token is an operator */
       case ((output, stack), op: Operator) => whileOperator(op)(output, stack)
-      /** Если токен - открывающая скобка */
+      /** when token is an open bracket */
       case ((output, stack), bracket: OpenBracket) => output -> (stack push bracket)
-      /** Если токен - закрывающая скобка */
-      case ((output, stack), bracket: CloseBracket) => whileNotOpenBracket(output, stack)
-
+      /** when token is an closed bracket */
+      case ((output, stack), _: CloseBracket) => whileNotOpenBracket(output, stack)
+      /** in case of unknown token */
       case _ => throw new Exception("Unknown exception during rpn conversion")
     } match {
       case (output, stack) => output ++ stack
@@ -204,7 +201,7 @@ object ReversePolishNotation {
       case (stack, _: Cos)      => stack.pop2 match { case (top, s) => s push cos(top.toDouble) }
       case (stack, _: Min)      => pop2execute(stack)((first, second) => BigDecimal(min(first.toDouble, second.toDouble)))
       case (stack, _: Max)      => pop2execute(stack)((first, second) => BigDecimal(max(first.toDouble, second.toDouble)))
-
+      // in case of unknown operation or function
       case _ => throw new Exception("Cannot determine operation on evaluation step")
     } match {
       case stack => stack.top
