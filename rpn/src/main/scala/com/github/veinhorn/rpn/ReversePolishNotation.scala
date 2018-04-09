@@ -43,14 +43,16 @@ object ReversePolishNotation {
   case class OpenBracket(value: String) extends Token
   case class CloseBracket(value: String) extends Token
   case class Comma(value: String) extends Token
+  class Dot extends Token
 
   // функции
   trait Func extends Token {
     override def priority: Int = 4
   }
-  case class Sin(value: String) extends Func
-  case class Min(value: String) extends Func
-  case class Max(value: String) extends Func
+  class Sin extends Func
+  class Cos extends Func
+  class Min extends Func
+  class Max extends Func
 
   /**
     * Преобразование строки в список токенов, передаваемая пустая строка используется для накопления цифр в числах,
@@ -63,13 +65,14 @@ object ReversePolishNotation {
     def numberOrFunction(s: String): Token = {
       /** Пытаемся найти поддерживаемые функции */
       def getFunction(funcName: String) = funcName match {
-        case "sin" => Sin(funcName)
-        case "min" => Min(funcName)
-        case "max" => Max(funcName)
+        case "sin" => new Sin
+        case "cos" => new Cos
+        case "min" => new Min
+        case "max" => new Max
         case _     => throw new Exception(s"Unsupported function name $s")
       }
 
-      s.forall(_.isDigit) match {
+      s.forall(c => c.isDigit || c == '.') match {
         case true => Number(s)
         case _    => getFunction(s)
       }
@@ -100,9 +103,12 @@ object ReversePolishNotation {
       case ((tokens, stack), symbol) if symbol.isLetter && stack.nonEmpty         => tokens -> (stack + symbol.toString)
       case ((tokens, stack), symbol) if symbol.isLetter && stack.isEmpty          => tokens -> ("" + symbol.toString)
 
-      // experimental
+      // парсинг запятой в аргументах функции
       case ((tokens, stack), ',') if stack.nonEmpty => ((tokens :+ numberOrFunction(stack)) :+ Comma(",")) -> ""
       case ((tokens, stack), ',') if stack.isEmpty => (tokens :+ Comma(",")) -> stack
+
+      // парсинг точки (experimental)
+      case ((tokens, stack), symbol@'.') => tokens -> (stack + symbol.toString)
 
       // парсинг операторов
       case ((tokens, stack), symbol) if !symbol.isLetterOrDigit && stack.nonEmpty => ((tokens :+ numberOrFunction(stack)) :+ operator(symbol)) -> ""
@@ -144,41 +150,30 @@ object ReversePolishNotation {
         tokens -> stack
       }
 
-    val res = tokens.foldLeft(List.empty[Token] -> Stack.empty[Token]) {
+    tokens.foldLeft(List.empty[Token] -> Stack.empty[Token]) {
       /** Если токен - число */
-      case ((output, stack), number@Number(_)) =>
-        (output :+ number) -> stack
+      case ((output, stack), number@Number(_)) => (output :+ number) -> stack
       /** Если токен - название функции */
-      case ((output, stack), func: Func)       =>
-        output -> (stack push func)
+      case ((output, stack), func: Func) => output -> (stack push func)
       /** Если токен - запятая */
-      case ((output, stack), Comma(_))         =>
-        val popped = stack.takeWhile { // ? отказоустойчивость + чекнуть что не было открывающей скобки
+      case ((output, stack), Comma(_)) =>
+        val popped = stack.takeWhile { // можно еще как-то проверить что не было открывающей скобки
           case OpenBracket(_) => false
           case _              => true
         }
         output ++ popped -> stack.takeRight(stack.length - popped.length)
       /** если токен - оператор */
-      case ((output, stack), op: Operator) =>
-        whileOperator(op)(output, stack)
+      case ((output, stack), op: Operator) => whileOperator(op)(output, stack)
       /** Если токен - открывающая скобка */
-      case ((output, stack), bracket@OpenBracket(_)) =>
-        output -> (stack push bracket)
+      case ((output, stack), bracket@OpenBracket(_)) => output -> (stack push bracket)
       /** Если токен - закрывающая скобка */
-      case ((output, stack), bracket@CloseBracket(_))
-      => whileNotOpenBracket(output, stack)
+      case ((output, stack), bracket@CloseBracket(_)) => whileNotOpenBracket(output, stack)
 
       case _                                   =>
         throw new Exception("Unknown exception during rpn conversion")
-    } /*match {
-      case (output, stack) => output ++ stack
-    }*/
-
-    val output = res match {
+    } match {
       case (output, stack) => output ++ stack
     }
-
-    output
   }
 
   def rpn(expression: String): List[Token] = rpn(tokenize(expression))
@@ -188,26 +183,28 @@ object ReversePolishNotation {
     * @param tokens in RPN postfix notation
     * @return result of evaluation
     */
-  def eval(tokens: List[Token]): Int = {
-    def pop2execute(stack: Stack[Int])(func: (Int, Int) => Int): Stack[Int] = {
+  def eval(tokens: List[Token]): BigDecimal = {
+    def pop2execute(stack: Stack[BigDecimal])(func: (BigDecimal, BigDecimal) => BigDecimal): Stack[BigDecimal] = {
       val (second, s1) = stack.pop2
       val (first, s2) = s1.pop2
-      (func(first, second) -> s2) match {
-        case (result, stack) => stack push result
+      func(first, second) -> s2 match {
+        case (result, s) => s push result
       }
     }
 
-    tokens.foldLeft(Stack.empty[Int]) {
-      case (stack, Number(value)) => stack push value.toInt
+    tokens.foldLeft(Stack.empty[BigDecimal]) {
+      case (stack, Number(value)) => stack push BigDecimal(value)
 
       case (stack, Plus(_))     => pop2execute(stack)(_ + _)
       case (stack, Minus(_))    => pop2execute(stack)(_ - _)
       case (stack, Multiply(_)) => pop2execute(stack)(_ * _)
       case (stack, Divide(_))   => pop2execute(stack)(_ / _)
-      case (stack, Power(_))    => pop2execute(stack)((first, second) => pow(first, second).toInt)
+      case (stack, Power(_))    => pop2execute(stack)((first, second) => BigDecimal(pow(first.toDouble, second.toDouble)))
       // functions
-      case (stack, Min(_))      => pop2execute(stack)((first, second) => min(first, second))
-      case (stack, Max(_))      => pop2execute(stack)((first, second) => max(first, second))
+      case (stack, _: Sin)      => stack.pop2 match { case (top, s) => s push sin(top.toDouble) }
+      case (stack, _: Cos)      => stack.pop2 match { case (top, s) => s push cos(top.toDouble) }
+      case (stack, _: Min)      => pop2execute(stack)((first, second) => BigDecimal(min(first.toDouble, second.toDouble)))
+      case (stack, _: Max)      => pop2execute(stack)((first, second) => BigDecimal(max(first.toDouble, second.toDouble)))
 
       case _ => throw new Exception("Cannot determine operation on evaluation step")
     } match {
@@ -215,5 +212,5 @@ object ReversePolishNotation {
     }
   }
 
-  def eval(expression: String): Int = eval(rpn(expression))
+  def eval(expression: String): BigDecimal = eval(rpn(expression))
 }

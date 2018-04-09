@@ -4,7 +4,7 @@ import com.github.veinhorn.rpn.ReversePolishNotation._
 import org.scalatest.{FlatSpec, Matchers}
 
 /**
-  * Base class which simplifies unit testing
+  * Some implicits to simplify testing
   */
 class BaseSpec extends FlatSpec with Matchers {
 
@@ -21,7 +21,6 @@ class BaseSpec extends FlatSpec with Matchers {
   }
 
   implicit class RpmExpression(expression: String) {
-
     def rpn: List[Token] = expression.split(" ").map(toToken).toList
 
     def ~>(token: String): List[Token] = toToken(expression) :: toToken(token) :: Nil
@@ -30,6 +29,4 @@ class BaseSpec extends FlatSpec with Matchers {
   implicit class ListWrapper(val tokens: List[Token]) {
     def ~>(token: String): ListWrapper = ListWrapper(tokens :+ toToken(token))
   }
-
-  // implicit def toList(wrapper: ListWrapper): List[Token] = wrapper.tokens
 }
