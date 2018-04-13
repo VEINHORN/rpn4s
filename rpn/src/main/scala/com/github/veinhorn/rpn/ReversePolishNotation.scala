@@ -112,11 +112,12 @@ object ReversePolishNotation {
       case ((tokens, stack), symbol) if !symbol.isLetterOrDigit && stack.isEmpty  => (tokens :+ operator(symbol)) -> ""
 
       // when we cannot determine what it is
-      case (_, symbol) => throw new Exception(s"Unknown error on \"$symbol\" symbol")
+      case (_, symbol) => throw new Exception(s"Unknown error on $symbol symbol")
     }
 
     /** At the end of tokenization pop number from stack if it's exist in the stack */
-    expression.foldLeft(List.empty[Token] -> "")(parser) match {
+    expression.foldLeft(List.empty[Token] -> "")(parser)
+    match {
       case (tokens, "")    => tokens
       case (tokens, stack) => tokens :+ Number(stack)
     }
