@@ -1,6 +1,6 @@
 # rpn-scala
 
-[rpn-scala](https://github.com/VEINHORN/scala-rpn) is a lightweight Scala library which helps you to start developing your own calculator. :smile: It's based on [reverse polish notation](https://en.wikipedia.org/wiki/Reverse_Polish_notation) and [Shunting-yard algorithm](https://en.wikipedia.org/wiki/Shunting-yard_algorithm) algorithms.
+[rpn-scala](https://github.com/VEINHORN/scala-rpn) is a lightweight Scala library which helps you to evaluate math expressions. It's based on [reverse polish notation](https://en.wikipedia.org/wiki/Reverse_Polish_notation) and [Shunting-yard algorithm](https://en.wikipedia.org/wiki/Shunting-yard_algorithm) algorithms.
 
 Key features:
 
